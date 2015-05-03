@@ -1,3 +1,35 @@
+##2015-03-31 - Supported Release 1.5.0
+###Summary
+
+This release includes physdev_is_bridged support, checksum_fill support, basic Gentoo compatibility, and a number of test fixes and improvements.
+
+####Features
+- Add `physdev_is_bridged` support
+- Add `checksum_fill` support
+- Add basic Gentoo compatibility (unsupported)
+
+####Bugfixes
+- Implementation for resource map munging to allow a single ipt module to be used multiple times in a single rule on older versions of iptables (MODULES-1808)
+- Test fixes
+
+##2015-01-27 - Supported Release 1.4.0
+###Summary
+
+This release includes physdev support, the ability to look up usernames from uuid, and a number of bugfixes
+
+####Features
+- Add `netmap` feature
+- Add `physdev` support
+- Add ability to look up username from uuid (MODULES-753, MODULES-1688)
+
+####Bugfixes
+- Sync iptables/ip6tables providers (MODULES-1612)
+- Fix package names for Amazon and Ubuntu 14.10 (MODULES-1029)
+- Fix overly aggressive gsub when `ensure => absent` (MODULES-1453)
+- Unable to parse `-m (tcp|udp)` rules (MODULES-1552)
+- Fix ip6tables provider when `iptables-ipv6` package isn't installed for EL6 (MODULES-633)
+- Test fixes
+
 ##2014-12-16 - Supported Release 1.3.0
 ###Summary
 

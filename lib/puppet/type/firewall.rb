@@ -137,10 +137,25 @@ Puppet::Type.newtype(:firewall) do
 
           src_range => '192.168.1.1-192.168.1.10'
 
-      The source IP range is must in 'IP1-IP2' format.
+      The source IP range must be in 'IP1-IP2' format.
     EOS
 
-    newvalues(/^((25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)-((25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)/)
+    validate do |value|
+      if matches = /^([^\-\/]+)-([^\-\/]+)$/.match(value)
+        start_addr = matches[1]
+        end_addr = matches[2]
+
+        [start_addr, end_addr].each do |addr|
+          begin
+            @resource.host_to_ip(addr)
+          rescue Exception
+            self.fail("Invalid IP address \"#{addr}\" in range \"#{value}\"")
+          end
+        end
+      else
+        raise(ArgumentError, "The source IP range must be in 'IP1-IP2' format.")
+      end
+    end
   end
 
   newproperty(:destination) do
@@ -172,10 +187,25 @@ Puppet::Type.newtype(:firewall) do
 
           dst_range => '192.168.1.1-192.168.1.10'
 
-      The destination IP range is must in 'IP1-IP2' format.
+      The destination IP range must be in 'IP1-IP2' format.
     EOS
 
-    newvalues(/^((25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)-((25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)/)
+    validate do |value|
+      if matches = /^([^\-\/]+)-([^\-\/]+)$/.match(value)
+        start_addr = matches[1]
+        end_addr = matches[2]
+
+        [start_addr, end_addr].each do |addr|
+          begin
+            @resource.host_to_ip(addr)
+          rescue Exception
+            self.fail("Invalid IP address \"#{addr}\" in range \"#{value}\"")
+          end
+        end
+      else
+        raise(ArgumentError, "The destination IP range must be in 'IP1-IP2' format.")
+      end
+    end
   end
 
   newproperty(:sport, :array_matching => :all) do
@@ -326,7 +356,7 @@ Puppet::Type.newtype(:firewall) do
       *tcp*.
     EOS
 
-    newvalues(*[:tcp, :udp, :icmp, :"ipv6-icmp", :esp, :ah, :vrrp, :igmp, :ipencap, :ospf, :gre, :cbt, :all].collect do |proto|
+    newvalues(*[:tcp, :udp, :icmp, :"ipv6-icmp", :esp, :ah, :vrrp, :igmp, :ipencap, :ipv4, :ipv6, :ospf, :gre, :cbt, :all].collect do |proto|
       [proto, "! #{proto}".to_sym]
     end.flatten)
     defaultto "tcp"
@@ -700,6 +730,46 @@ Puppet::Type.newtype(:firewall) do
       only, as iptables does not accept multiple uid in a single
       statement.
     EOS
+    def insync?(is)
+      require 'etc'
+
+      # The following code allow us to take into consideration unix mappings
+      # between string usernames and UIDs (integers). We also need to ignore
+      # spaces as they are irrelevant with respect to rule sync.
+
+      # Remove whitespace
+      is = is.gsub(/\s+/,'')
+      should = @should.first.to_s.gsub(/\s+/,'')
+
+      # Keep track of negation, but remove the '!'
+      is_negate = ''
+      should_negate = ''
+      if is.start_with?('!')
+        is = is.gsub(/^!/,'')
+        is_negate = '!'
+      end
+      if should.start_with?('!')
+        should = should.gsub(/^!/,'')
+        should_negate = '!'
+      end
+
+      # If 'should' contains anything other than digits,
+      # we assume that we have to do a lookup to convert
+      # to UID
+      unless should[/[0-9]+/] == should
+        should = Etc.getpwnam(should).uid
+      end
+
+      # If 'is' contains anything other than digits,
+      # we assume that we have to do a lookup to convert
+      # to UID
+      unless is[/[0-9]+/] == is
+        is = Etc.getpwnam(is).uid
+      end
+
+      return "#{is_negate}#{is}" == "#{should_negate}#{should}"
+    end
+
   end
 
   newproperty(:gid, :required_features => :owner) do
@@ -990,6 +1060,14 @@ Puppet::Type.newtype(:firewall) do
     EOS
   end
 
+  newproperty(:checksum_fill, :required_features => :iptables) do
+    desc <<-EOS
+      Compute and fill missing packet checksums.
+    EOS
+
+    newvalues(:true, :false)
+  end
+
   newparam(:line) do
     desc <<-EOS
       Read-only property for caching the rule line.
@@ -1001,6 +1079,27 @@ Puppet::Type.newtype(:firewall) do
       MAC Source
     EOS
     newvalues(/^([0-9a-f]{2}[:]){5}([0-9a-f]{2})$/i)
+  end
+
+  newproperty(:physdev_in, :required_features => :iptables) do
+    desc <<-EOS
+      Match if the packet is entering a bridge from the given interface.
+    EOS
+    newvalues(/^[a-zA-Z0-9\-\._\+]+$/)
+  end
+
+  newproperty(:physdev_out, :required_features => :iptables) do
+    desc <<-EOS
+      Match if the packet is leaving a bridge via the given interface.
+    EOS
+    newvalues(/^[a-zA-Z0-9\-\._\+]+$/)
+  end
+
+  newproperty(:physdev_is_bridged, :required_features => :iptables) do
+    desc <<-EOS
+      Match if the packet is transversing a bridge.
+    EOS
+    newvalues(:true, :false)
   end
 
   autorequire(:firewallchain) do
@@ -1029,7 +1128,7 @@ Puppet::Type.newtype(:firewall) do
   autorequire(:package) do
     case value(:provider)
     when :iptables, :ip6tables
-      %w{iptables iptables-persistent iptables-services}
+      %w{iptables iptables-persistent netfilter-persistent iptables-services}
     else
       []
     end
@@ -1159,6 +1258,12 @@ Puppet::Type.newtype(:firewall) do
 
     if value(:stat_probability) && value(:stat_mode) != :random
       self.fail "Parameter 'stat_probability' requires 'stat_mode' to be set to 'random'"
+    end
+
+    if value(:checksum_fill)
+      unless value(:jump).to_s == "CHECKSUM" && value(:table).to_s == "mangle"
+        self.fail "Parameter checksum_fill requires jump => CHECKSUM and table => mangle"
+      end
     end
 
   end

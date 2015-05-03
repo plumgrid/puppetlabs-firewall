@@ -21,6 +21,13 @@ Puppet::Type.type(:firewall).provide :ip6tables, :parent => :iptables, :source =
   has_feature :ishasmorefrags
   has_feature :islastfrag
   has_feature :isfirstfrag
+  has_feature :socket
+  has_feature :address_type
+  has_feature :iprange
+  has_feature :ipsec_dir
+  has_feature :ipsec_policy
+  has_feature :mask
+  has_feature :ipset
 
   optional_commands({
     :ip6tables      => 'ip6tables',
@@ -29,8 +36,17 @@ Puppet::Type.type(:firewall).provide :ip6tables, :parent => :iptables, :source =
 
   confine :kernel => :linux
 
+  ip6tables_version = Facter.fact('ip6tables_version').value
+  if (ip6tables_version and Puppet::Util::Package.versioncmp(ip6tables_version, '1.4.1') < 0)
+    mark_flag = '--set-mark'
+  else
+    mark_flag = '--set-xmark'
+  end
+
+
   def initialize(*args)
-    if Facter.fact('ip6tables_version').value.match /1\.3\.\d/
+    ip6tables_version = Facter.value('ip6tables_version')
+    if ip6tables_version and ip6tables_version.match /1\.3\.\d/
       raise ArgumentError, 'The ip6tables provider is not supported on version 1.3 of iptables'
     else
       super
@@ -48,56 +64,101 @@ Puppet::Type.type(:firewall).provide :ip6tables, :parent => :iptables, :source =
   @protocol = "IPv6"
 
   @resource_map = {
-    :burst            => "--limit-burst",
-    :connlimit_above  => "-m connlimit --connlimit-above",
-    :connlimit_mask   => "--connlimit-mask",
-    :connmark         => "-m connmark --mark",
-    :ctstate          => "-m conntrack --ctstate",
-    :destination      => "-d",
-    :dport            => "-m multiport --dports",
-    :gid              => "-m owner --gid-owner",
-    :hop_limit        => "-m hl --hl-eq",
-    :icmp             => "-m icmp6 --icmpv6-type",
-    :iniface          => "-i",
-    :isfirstfrag      => "-m frag --fragid 0 --fragfirst",
-    :ishasmorefrags   => "-m frag --fragid 0 --fragmore",
-    :islastfrag       => "-m frag --fragid 0 --fraglast",
-    :jump             => "-j",
-    :limit            => "-m limit --limit",
-    :log_level        => "--log-level",
-    :log_prefix       => "--log-prefix",
-    :name             => "-m comment --comment",
-    :outiface         => "-o",
-    :pkttype          => "-m pkttype --pkt-type",
-    :port             => '-m multiport --ports',
-    :proto            => "-p",
-    :rdest            => "--rdest",
-    :reap             => "--reap",
-    :recent           => "-m recent",
-    :reject           => "--reject-with",
-    :rhitcount        => "--hitcount",
-    :rname            => "--name",
-    :rseconds         => "--seconds",
-    :rsource          => "--rsource",
-    :rttl             => "--rttl",
-    :source           => "-s",
-    :sport            => "-m multiport --sports",
-    :stat_every       => '--every',
-    :stat_mode        => "-m statistic --mode",
-    :stat_packet      => '--packet',
-    :stat_probability => '--probability',
-    :state            => "-m state --state",
-    :table            => "-t",
-    :tcp_flags        => "-m tcp --tcp-flags",
-    :todest           => "--to-destination",
-    :toports          => "--to-ports",
-    :tosource         => "--to-source",
-    :uid              => "-m owner --uid-owner",
+    :burst              => "--limit-burst",
+    :checksum_fill      => "--checksum-fill",
+    :connlimit_above    => "-m connlimit --connlimit-above",
+    :connlimit_mask     => "--connlimit-mask",
+    :connmark           => "-m connmark --mark",
+    :ctstate            => "-m conntrack --ctstate",
+    :destination        => "-d",
+    :dport              => ["-m multiport --dports", "--dport"],
+    :dst_range          => '--dst-range',
+    :dst_type           => "--dst-type",
+    :gid                => "--gid-owner",
+    :hop_limit          => "-m hl --hl-eq",
+    :icmp               => "-m icmp6 --icmpv6-type",
+    :iniface            => "-i",
+    :ipsec_dir          => "-m policy --dir",
+    :ipsec_policy       => "--pol",
+    :ipset              => "-m set --match-set",
+    :isfirstfrag        => "-m frag --fragid 0 --fragfirst",
+    :ishasmorefrags     => "-m frag --fragid 0 --fragmore",
+    :islastfrag         => "-m frag --fragid 0 --fraglast",
+    :jump               => "-j",
+    :limit              => "-m limit --limit",
+    :log_level          => "--log-level",
+    :log_prefix         => "--log-prefix",
+    :mask               => "--mask",
+    :name               => "-m comment --comment",
+    :mac_source         => ["-m mac --mac-source", "--mac-source"],
+    :outiface           => "-o",
+    :pkttype            => "-m pkttype --pkt-type",
+    :port               => '-m multiport --ports',
+    :proto              => "-p",
+    :rdest              => "--rdest",
+    :reap               => "--reap",
+    :recent             => "-m recent",
+    :reject             => "--reject-with",
+    :rhitcount          => "--hitcount",
+    :rname              => "--name",
+    :rseconds           => "--seconds",
+    :rsource            => "--rsource",
+    :rttl               => "--rttl",
+    :set_mark           => mark_flag,
+    :socket             => "-m socket",
+    :source             => "-s",
+    :sport              => ["-m multiport --sports", "--sport"],
+    :src_range          => '--src-range',
+    :src_type           => "--src-type",
+    :stat_every         => '--every',
+    :stat_mode          => "-m statistic --mode",
+    :stat_packet        => '--packet',
+    :stat_probability   => '--probability',
+    :state              => "-m state --state",
+    :table              => "-t",
+    :tcp_flags          => "-m tcp --tcp-flags",
+    :todest             => "--to-destination",
+    :toports            => "--to-ports",
+    :tosource           => "--to-source",
+    :uid                => "--uid-owner",
+    :physdev_in         => "--physdev-in",
+    :physdev_out        => "--physdev-out",
+    :physdev_is_bridged => "--physdev-is-bridged"
   }
 
   # These are known booleans that do not take a value, but we want to munge
   # to true if they exist.
-  @known_booleans = [:ishasmorefrags, :islastfrag, :isfirstfrag, :rsource, :rdest, :reap, :rttl]
+  @known_booleans = [
+    :checksum_fill,
+    :ishasmorefrags,
+    :islastfrag,
+    :isfirstfrag,
+    :rsource,
+    :rdest,
+    :reap,
+    :rttl,
+    :socket,
+    :physdev_is_bridged
+  ]
+
+  # Properties that use "-m <ipt module name>" (with the potential to have multiple 
+  # arguments against the same IPT module) must be in this hash. The keys in this
+  # hash are the IPT module names, with the values being an array of the respective
+  # supported arguments for this IPT module.
+  #
+  # ** IPT Module arguments must be in order as they would appear in iptables-save **
+  #
+  # Exceptions:
+  #             => multiport: (For some reason, the multiport arguments can't be)
+  #                specified within the same "-m multiport", but works in seperate
+  #                ones.
+  #
+  @module_to_argument_mapping = {
+    :physdev   => [:physdev_in, :physdev_out, :physdev_is_bridged],
+    :addrtype  => [:src_type, :dst_type],
+    :iprange   => [:src_range, :dst_range],
+    :owner     => [:uid, :gid],
+  }
 
   # Create property methods dynamically
   (@resource_map.keys << :chain << :table << :action).each do |property|
@@ -133,11 +194,13 @@ Puppet::Type.type(:firewall).provide :ip6tables, :parent => :iptables, :source =
   # (Note: on my CentOS 6.4 ip6tables-save returns -m frag on the place
   # I put it when calling the command. So compability with manual changes
   # not provided with current parser [georg.koester])
-  @resource_list = [:table, :source, :destination, :iniface, :outiface,
-    :proto, :ishasmorefrags, :islastfrag, :isfirstfrag, :tcp_flags, :gid, :uid, :sport, :dport,
-    :port, :pkttype, :name, :state, :ctstate, :icmp, :hop_limit, :limit, :burst,
-    :recent, :rseconds, :reap, :rhitcount, :rttl, :rname, :rsource, :rdest,
-    :jump, :todest, :tosource, :toports, :log_level, :log_prefix, :reject,
-    :connlimit_above, :connlimit_mask, :connmark]
+  @resource_list = [:table, :source, :destination, :iniface, :outiface, :physdev_in,
+    :physdev_out, :physdev_is_bridged, :proto, :ishasmorefrags, :islastfrag, :isfirstfrag, :src_range, :dst_range,
+    :tcp_flags, :uid, :gid, :mac_source, :sport, :dport, :port, :src_type,
+    :dst_type, :socket, :pkttype, :name, :ipsec_dir, :ipsec_policy, :state,
+    :ctstate, :icmp, :hop_limit, :limit, :burst, :recent, :rseconds, :reap,
+    :rhitcount, :rttl, :rname, :mask, :rsource, :rdest, :ipset, :jump, :todest,
+    :tosource, :toports, :checksum_fill, :log_level, :log_prefix, :reject,
+    :set_mark, :connlimit_above, :connlimit_mask, :connmark]
 
 end

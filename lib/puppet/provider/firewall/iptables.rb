@@ -50,74 +50,141 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
   @protocol = "IPv4"
 
   @resource_map = {
-    :burst            => "--limit-burst",
-    :connlimit_above  => "-m connlimit --connlimit-above",
-    :connlimit_mask   => "--connlimit-mask",
-    :connmark         => "-m connmark --mark",
-    :ctstate          => "-m conntrack --ctstate",
-    :destination      => "-d",
-    :dport            => ["-m multiport --dports", "--dport"],
-    :dst_range        => "-m iprange --dst-range",
-    :dst_type         => "-m addrtype --dst-type",
-    :gid              => "-m owner --gid-owner",
-    :icmp             => "-m icmp --icmp-type",
-    :iniface          => "-i",
-    :ipsec_dir        => "-m policy --dir",
-    :ipsec_policy     => "--pol",
-    :ipset            => "-m set --match-set",
-    :isfragment       => "-f",
-    :jump             => "-j",
-    :limit            => "-m limit --limit",
-    :log_level        => "--log-level",
-    :log_prefix       => "--log-prefix",
-    :mac_source       => ["-m mac --mac-source", "--mac-source"],
-    :mask             => '--mask',
-    :name             => "-m comment --comment",
-    :outiface         => "-o",
-    :pkttype          => "-m pkttype --pkt-type",
-    :port             => '-m multiport --ports',
-    :proto            => "-p",
-    :random           => "--random",
-    :rdest            => "--rdest",
-    :reap             => "--reap",
-    :recent           => "-m recent",
-    :reject           => "--reject-with",
-    :rhitcount        => "--hitcount",
-    :rname            => "--name",
-    :rseconds         => "--seconds",
-    :rsource          => "--rsource",
-    :rttl             => "--rttl",
-    :set_mark         => mark_flag,
-    :socket           => "-m socket",
-    :source           => "-s",
-    :sport            => ["-m multiport --sports", "--sport"],
-    :src_range        => "-m iprange --src-range",
-    :src_type         => "-m addrtype --src-type",
-    :stat_every       => '--every',
-    :stat_mode        => "-m statistic --mode",
-    :stat_packet      => '--packet',
-    :stat_probability => '--probability',
-    :state            => "-m state --state",
-    :table            => "-t",
-    :tcp_flags        => "-m tcp --tcp-flags",
-    :todest           => "--to-destination",
-    :toports          => "--to-ports",
-    :tosource         => "--to-source",
-    :to               => "--to",
-    :uid              => "-m owner --uid-owner",
+    :burst              => "--limit-burst",
+    :checksum_fill      => "--checksum-fill",
+    :connlimit_above    => "-m connlimit --connlimit-above",
+    :connlimit_mask     => "--connlimit-mask",
+    :connmark           => "-m connmark --mark",
+    :ctstate            => "-m conntrack --ctstate",
+    :destination        => "-d",
+    :dport              => ["-m multiport --dports", "--dport"],
+    :dst_range          => "--dst-range",
+    :dst_type           => "--dst-type",
+    :gid                => "--gid-owner",
+    :icmp               => "-m icmp --icmp-type",
+    :iniface            => "-i",
+    :ipsec_dir          => "-m policy --dir",
+    :ipsec_policy       => "--pol",
+    :ipset              => "-m set --match-set",
+    :isfragment         => "-f",
+    :jump               => "-j",
+    :limit              => "-m limit --limit",
+    :log_level          => "--log-level",
+    :log_prefix         => "--log-prefix",
+    :mac_source         => ["-m mac --mac-source", "--mac-source"],
+    :mask               => '--mask',
+    :name               => "-m comment --comment",
+    :outiface           => "-o",
+    :pkttype            => "-m pkttype --pkt-type",
+    :port               => '-m multiport --ports',
+    :proto              => "-p",
+    :random             => "--random",
+    :rdest              => "--rdest",
+    :reap               => "--reap",
+    :recent             => "-m recent",
+    :reject             => "--reject-with",
+    :rhitcount          => "--hitcount",
+    :rname              => "--name",
+    :rseconds           => "--seconds",
+    :rsource            => "--rsource",
+    :rttl               => "--rttl",
+    :set_mark           => mark_flag,
+    :socket             => "-m socket",
+    :source             => "-s",
+    :sport              => ["-m multiport --sports", "--sport"],
+    :src_range          => "--src-range",
+    :src_type           => "--src-type",
+    :stat_every         => '--every',
+    :stat_mode          => "-m statistic --mode",
+    :stat_packet        => '--packet',
+    :stat_probability   => '--probability',
+    :state              => "-m state --state",
+    :table              => "-t",
+    :tcp_flags          => "-m tcp --tcp-flags",
+    :todest             => "--to-destination",
+    :toports            => "--to-ports",
+    :tosource           => "--to-source",
+    :to                 => "--to",
+    :uid                => "--uid-owner",
+    :physdev_in         => "--physdev-in",
+    :physdev_out        => "--physdev-out",
+    :physdev_is_bridged => "--physdev-is-bridged"
   }
 
   # These are known booleans that do not take a value, but we want to munge
   # to true if they exist.
   @known_booleans = [
+    :checksum_fill,
     :isfragment,
     :random,
     :rdest,
     :reap,
     :rsource,
     :rttl,
-    :socket
+    :socket,
+    :physdev_is_bridged
   ]
+
+  # Properties that use "-m <ipt module name>" (with the potential to have multiple 
+  # arguments against the same IPT module) must be in this hash. The keys in this
+  # hash are the IPT module names, with the values being an array of the respective
+  # supported arguments for this IPT module.
+  #
+  # ** IPT Module arguments must be in order as they would appear in iptables-save **
+  #
+  # Exceptions:
+  #             => multiport: (For some reason, the multiport arguments can't be)
+  #                specified within the same "-m multiport", but works in seperate
+  #                ones.
+  #
+  @module_to_argument_mapping = {
+    :physdev   => [:physdev_in, :physdev_out, :physdev_is_bridged],
+    :addrtype  => [:src_type, :dst_type],
+    :iprange   => [:src_range, :dst_range],
+    :owner     => [:uid, :gid],
+  }
+
+  def self.munge_resource_map_from_existing_values(resource_map_original, compare)
+    resource_map_new = resource_map_original.clone
+
+    @module_to_argument_mapping.each do |ipt_module, arg_array|
+      arg_array.each do |argument|
+        if resource_map_original[argument].is_a?(Array)
+          if compare.include?(resource_map_original[argument].first)
+            resource_map_new[argument] = resource_map_original[argument].clone
+            resource_map_new[argument][0] = "-m #{ipt_module.to_s} #{resource_map_original[argument].first}"
+            break
+          end
+        else
+          if compare.include?(resource_map_original[argument])
+            resource_map_new[argument] = "-m #{ipt_module.to_s} #{resource_map_original[argument]}"
+            break
+          end
+        end
+      end
+    end
+    resource_map_new
+  end
+
+  def munge_resource_map_from_resource(resource_map_original, compare)
+    resource_map_new = resource_map_original.clone
+    module_to_argument_mapping = self.class.instance_variable_get('@module_to_argument_mapping')
+
+    module_to_argument_mapping.each do |ipt_module, arg_array|
+      arg_array.each do |argument|
+        if compare[argument]
+          if resource_map_original[argument].is_a?(Array)
+            resource_map_new[argument] = resource_map_original[argument].clone
+            resource_map_new[argument][0] = "-m #{ipt_module.to_s} #{resource_map_original[argument].first}"
+          else
+            resource_map_new[argument] = "-m #{ipt_module.to_s} #{resource_map_original[argument]}"
+          end
+          break
+        end
+      end
+    end
+    resource_map_new
+  end
 
 
   # Create property methods dynamically
@@ -152,13 +219,13 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
   # changes between puppet runs, the changed rules will be re-applied again.
   # This order can be determined by going through iptables source code or just tweaking and trying manually
   @resource_list = [
-    :table, :source, :destination, :iniface, :outiface, :proto, :isfragment,
+    :table, :source, :destination, :iniface, :outiface, :physdev_in, :physdev_out, :physdev_is_bridged, :proto, :isfragment,
     :stat_mode, :stat_every, :stat_packet, :stat_probability,
-    :src_range, :dst_range, :tcp_flags, :gid, :uid, :mac_source, :sport, :dport, :port,
-    :dst_type, :src_type, :socket, :pkttype, :name, :ipsec_dir, :ipsec_policy,
+    :src_range, :dst_range, :tcp_flags, :uid, :gid, :mac_source, :sport, :dport, :port,
+    :src_type, :dst_type, :socket, :pkttype, :name, :ipsec_dir, :ipsec_policy,
     :state, :ctstate, :icmp, :limit, :burst, :recent, :rseconds, :reap,
     :rhitcount, :rttl, :rname, :mask, :rsource, :rdest, :ipset, :jump, :todest,
-    :tosource, :toports, :to, :random, :log_prefix, :log_level, :reject, :set_mark,
+    :tosource, :toports, :to, :checksum_fill, :random, :log_prefix, :log_level, :reject, :set_mark,
     :connlimit_above, :connlimit_mask, :connmark
   ]
 
@@ -233,7 +300,7 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
     # the actual rule will have the ! mark before the option.
     values = values.gsub(/(!)\s*(-\S+)\s*(\S*)/, '\2 "\1 \3"')
     # The match extension for tcp & udp are optional and throws off the @resource_map.
-    values = values.gsub(/-m (tcp|udp) (--(s|d)port|-m multiport)/, '\2')
+    values = values.gsub(/(?!-m tcp --tcp-flags)-m (tcp|udp) /, '')
     # '--pol ipsec' takes many optional arguments; we cheat again by adding " around them
     values = values.sub(/
         --pol\sipsec
@@ -248,6 +315,8 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
         '--pol "ipsec\1\2\3\4\5\6\7\8" '
     )
 
+    resource_map = munge_resource_map_from_existing_values(@resource_map, values)
+
     # Trick the system for booleans
     @known_booleans.each do |bool|
       # append "true" because all params are expected to have values
@@ -257,7 +326,7 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
         # distinguish between -f and the '-f' inside of --tcp-flags.
         values = values.sub(/-f(?!l)(?=.*--comment)/, '-f true')
       else
-        values = values.sub(/#{@resource_map[bool]}/, "#{@resource_map[bool]} true")
+        values = values.sub(/#{resource_map[bool]}/, "#{resource_map[bool]} true")
       end
     end
 
@@ -265,9 +334,9 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
     # Populate parser_list with used value, in the correct order
     ############
     map_index={}
-    @resource_map.each_pair do |map_k,map_v|
+    resource_map.each_pair do |map_k,map_v|
       [map_v].flatten.each do |v|
-        ind=values.index(/\s#{v}/)
+        ind=values.index(/\s#{v}\s/)
         next unless ind
         map_index[map_k]=ind
      end
@@ -282,7 +351,7 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
 
     # Here we iterate across our values to generate an array of keys
     parser_list.reverse.each do |k|
-      resource_map_key = @resource_map[k]
+      resource_map_key = resource_map[k]
       [resource_map_key].flatten.each do |opt|
         if values.slice!(/\s#{opt}/)
           keys << k
@@ -428,7 +497,7 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
 
   def delete_args
     # Split into arguments
-    line = properties[:line].gsub(/\-A/, '-D').split(/\s(?=(?:[^"]|"[^"]*")*$)/).map{|v| v.gsub(/"/, '')}
+    line = properties[:line].gsub(/\-A /, '-D ').split(/\s(?=(?:[^"]|"[^"]*")*$)/).map{|v| v.gsub(/"/, '')}
     line.unshift("-t", properties[:table])
   end
 
@@ -439,8 +508,9 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
 
     args = []
     resource_list = self.class.instance_variable_get('@resource_list')
-    resource_map = self.class.instance_variable_get('@resource_map')
     known_booleans = self.class.instance_variable_get('@known_booleans')
+    resource_map = self.class.instance_variable_get('@resource_map')
+    resource_map = munge_resource_map_from_resource(resource_map, resource)
 
     resource_list.each do |res|
       resource_value = nil
