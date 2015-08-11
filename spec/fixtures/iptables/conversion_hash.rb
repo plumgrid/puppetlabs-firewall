@@ -231,6 +231,13 @@ ARGS_TO_HASH = {
       :source => '192.168.0.1/32',
     },
   },
+  'string_escape_sequences' => {
+    :line => '-A INPUT -m comment --comment "000 parse escaped \\"s, \\\'s, and \\\\s"',
+    :table => 'filter',
+    :params => {
+      :name => '000 parse escaped "s, \'s, and \\s',
+    },
+  },
   'log_level_debug' => {
     :line => '-A INPUT -m comment --comment "956 INPUT log-level" -m state --state NEW -j LOG --log-level 7',
     :table => 'filter',
@@ -761,6 +768,13 @@ HASH_TO_ARGS = {
     },
     :args => ['-t', :filter, '-s', '192.168.0.1/32', '-p', :tcp, '-m', 'comment', '--comment', '000 allow from 192.168.0.1, please'],
   },
+  'comment_string_character_validation_2' => {
+    :params => {
+      :name => "000 allow symbols ( $+<=>^`|~ ) in ruby >= 1.9",
+      :table => 'filter',
+    },
+    :args => ['-t', :filter, '-p', :tcp, '-m', 'comment', '--comment', '000 allow symbols ( $+<=>^`|~ ) in ruby >= 1.9'],
+  },
   'port_property' => {
     :params => {
       :name => '001 port property',
@@ -1091,5 +1105,16 @@ HASH_TO_ARGS = {
       :clamp_mss_to_pmtu => true,
     },
     :args => ["-t", :filter, "-p", :tcp, "-m", "tcp", "--tcp-flags", "SYN,RST", "SYN", "-m", "comment", "--comment", "067 change max segment size", "-j", "TCPMSS", "--clamp-mss-to-pmtu"],
+  },
+  'set_dscp_class' => {
+    :params => {
+      :name              => '068 set dscp class to EF',
+      :table             => 'mangle',
+      :proto             => 'tcp',
+      :port              => '997',
+      :jump              => 'DSCP',
+      :set_dscp_class    => 'ef',
+    },
+    :args => ["-t", :mangle, "-p", :tcp, "-m", "multiport", '--ports', '997', "-m", "comment", "--comment", "068 set dscp class to EF", "-j", "DSCP", "--set-dscp-class", "ef"],
   },
 }
